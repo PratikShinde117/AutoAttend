@@ -12,8 +12,6 @@ Developed by:
 - Aditya Kotewar
 - Ajit Chavan
 
-Under guidance of: Prof. Zarina Shaikh, Dr. D. Y. Patil Institute of Technology, Pune
-
 ## Features
 
 - **Facial Recognition**: Automated attendance marking using real-time face detection
