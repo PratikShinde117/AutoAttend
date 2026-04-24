@@ -15,13 +15,6 @@ import os
 dotenv.load_dotenv()
 
 
-
-
-
-
-
-
-
 def recognize_and_mark_attendance(subject, dept, division, session_id):
 
     conn = psycopg2.connect(
@@ -56,9 +49,9 @@ def recognize_and_mark_attendance(subject, dept, division, session_id):
             "div": stud_div
         })
 
-    print(f"✅ Loaded {len(known_faces)} faces from database")
+    print(f"Loaded {len(known_faces)} faces from database")
 
-    # 📸 Start Camera
+    # Start Camera
     video_capture = cv2.VideoCapture(0)
     time.sleep(2)
 
@@ -98,11 +91,11 @@ def recognize_and_mark_attendance(subject, dept, division, session_id):
                         stud_div = student["div"]
 
                         if stud_dept != dept:
-                            print(f"❌ WRONG DEPT: Roll No {roll_no} | {stud_name} | Dept: {stud_dept}")
+                            print(f"WRONG DEPT: Roll No {roll_no} | {stud_name} | Dept: {stud_dept}")
                             label = "Wrong Dept"
 
                         elif stud_div != division:
-                            print(f"⚠️ WRONG DIVISION: Roll No {roll_no} | {stud_name} | Division: {stud_div}")
+                            print(f"WRONG DIVISION: Roll No {roll_no} | {stud_name} | Division: {stud_div}")
                             label = "Wrong Div"
 
                         else:
@@ -120,11 +113,11 @@ def recognize_and_mark_attendance(subject, dept, division, session_id):
 
                                 conn.commit()
                     else:
-                        print("❌ UNKNOWN FACE DETECTED")
+                        print("UNKNOWN FACE DETECTED")
                 else:
-                    print("❌ UNKNOWN FACE DETECTED")
+                    print("UNKNOWN FACE DETECTED")
 
-                # 📌 Draw box
+                #  Draw box
                 top, right, bottom, left = [v * 2 for v in face_location]
                 cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
                 cv2.putText(frame, label,
