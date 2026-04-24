@@ -56,13 +56,13 @@ def api_add_face():
     dept = data.get("stud_dept")       
     division = data.get("stud_div") 
 
-    # 🔥 validation
+    #  validation
     if not roll_no or not name or not dept or not division:
         return jsonify({
             "error": "roll_no, name, dept, and division are required"
         }), 400
 
-    # 🔥 call updated function
+    # call updated function
     result = add_new_face(roll_no, name, dept, division)
 
     return jsonify(result)
@@ -80,7 +80,7 @@ def camera_on():
     subject = data.get("subject")
     division = data.get("division")
 
-    # 🔥 get from JWT
+    #  get from JWT
     dept = request.user.get("fac_dept")
     faculty_id = request.user.get("fac_id")
 
@@ -105,7 +105,7 @@ def camera_on():
 )
         cursor = conn.cursor()
 
-        # 🔥 create attendance session
+        #  create attendance session
         cursor.execute("""
             INSERT INTO attendance_sessions (subject, dept, division, faculty_id)
             VALUES (%s, %s, %s, %s)
@@ -115,7 +115,7 @@ def camera_on():
         session_id = cursor.fetchone()[0]
         conn.commit()
 
-        print(f"✅ Session created: {session_id}")
+        print(f" Session created: {session_id}")
 
     except Exception as e:
         if conn:
@@ -128,13 +128,13 @@ def camera_on():
         if conn:
             conn.close()
 
-    # 🔥 start camera thread
+    #  start camera thread
     globals.camera_active = True
 
     camera_thread_instance = threading.Thread(
         target=camera_thread,
         args=(subject, dept, division, session_id),
-        daemon=True   # ✅ important (auto cleanup)
+        daemon=True   # important (auto cleanup)
     )
     camera_thread_instance.start()
 
@@ -535,11 +535,11 @@ def request_attendance():
 
 
 
-@app.route('/uploads/<filename>', methods=['GET'])
-@token_required(roles=["faculty"])
-def get_uploaded_file(filename):
-    filename = secure_filename(filename)
-    return send_from_directory(UPLOAD_FOLDER, filename)
+# @app.route('/uploads/<filename>', methods=['GET'])
+# @token_required(roles=["faculty"])
+# def get_uploaded_file(filename):
+#     filename = secure_filename(filename)
+#     return send_from_directory(UPLOAD_FOLDER, filename)
 
 
 @app.route("/attendance-requests", methods=["GET"])
