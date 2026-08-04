@@ -1,0 +1,23 @@
+# 🔥 env files
+.env
+nodebackend/.env
+
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+
+# uploads
+uploads/
+
+# logs
+*.log
+
+# excel reports
+reports/
+*.xlsx

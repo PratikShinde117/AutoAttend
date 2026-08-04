@@ -10,104 +10,140 @@ import psycopg2
 import face_recognition
 from datetime import datetime
 import globals  # Import the shared global state
+import dotenv
+import os
+dotenv.load_dotenv()
 
-def recognize_and_mark_attendance(subject_name):
-    subject_filename = f"{subject_name}_attendance.xlsx"
 
-    # 📌 Load existing attendance sheet or create a new one from "students.xlsx"
-    if os.path.exists(subject_filename):
-        df_students = pd.read_excel(subject_filename, engine="openpyxl")
-    else:
-        students_file = "students.xlsx"
-        df_students = pd.read_excel(students_file, engine="openpyxl")
-        df_students.columns = df_students.columns.str.strip()
 
-    # 📌 Connect to PostgreSQL Database
+
+
+
+
+
+
+def recognize_and_mark_attendance(subject, dept, division, session_id):
+
     conn = psycopg2.connect(
-        dbname="project",
-        user="postgres",
-        password="pratik115",
-        host="localhost",
-        port="5432"
-    )
+    dbname=os.getenv("DB_NAME"),
+    user=os.getenv("DB_USER"),
+    password=os.getenv("DB_PASSWORD"),
+    host=os.getenv("DB_HOST"),
+    port=os.getenv("DB_PORT")
+)
     cursor = conn.cursor()
 
-    # 📌 Load stored face encodings
-    known_faces = []
-    known_names = []
-    cursor.execute("SELECT name, encoding FROM faces")
+    
+    cursor.execute("""
+        SELECT f.roll_no, f.encoding, s.stud_name, s.stud_dept, s.stud_div
+        FROM faces f
+        JOIN student_info s ON f.roll_no = s.roll_no
+        WHERE s.stud_dept = %s AND s.stud_div = %s
+    """, (dept, division))
+
     rows = cursor.fetchall()
 
-    for name, encoding_str in rows:
+    known_faces = []
+    known_students = []
+
+    for roll_no, encoding_str, stud_name, stud_dept, stud_div in rows:
         encoding = np.array(json.loads(encoding_str), dtype=np.float32)
         known_faces.append(encoding)
-        known_names.append(name)
+        known_students.append({
+            "roll_no": roll_no,
+            "name": stud_name,
+            "dept": stud_dept,
+            "div": stud_div
+        })
 
-    print(f"✅ Loaded {len(known_faces)} faces from database.")
+    print(f"✅ Loaded {len(known_faces)} faces from database")
 
-    # 📌 Start Camera for Face Recognition
+    # 📸 Start Camera
     video_capture = cv2.VideoCapture(0)
     time.sleep(2)
 
     if not video_capture.isOpened():
         return {"error": "Could not open camera"}
 
-    present_students = set()
+    marked_rolls = set()
 
     try:
-        while globals.camera_active:  # ✅ Read shared variable from globals.py
+        while globals.camera_active:
             ret, frame = video_capture.read()
             if not ret:
-                continue  
+                continue
 
-            # 📌 Resize frame for faster processing
             small_frame = cv2.resize(frame, (0, 0), fx=0.5, fy=0.5)
             rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-            # 📌 Detect faces
             face_locations = face_recognition.face_locations(rgb_small_frame)
             face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
 
             for face_encoding, face_location in zip(face_encodings, face_locations):
-                matches = face_recognition.compare_faces(known_faces, face_encoding, tolerance=0.5)
-                name = "Unknown"
 
+                matches = face_recognition.compare_faces(known_faces, face_encoding, tolerance=0.5)
                 face_distances = face_recognition.face_distance(known_faces, face_encoding)
+
+                label = "Unknown"
+
                 if len(face_distances) > 0:
                     best_match_index = np.argmin(face_distances)
+
                     if matches[best_match_index]:
-                        name = known_names[best_match_index]
-                        present_students.add(name)  # ✅ Store recognized students
+                        student = known_students[best_match_index]
 
-                # 📌 Draw rectangle & label on detected face
-                top, right, bottom, left = [v * 2 for v in face_location]  # Scale back after resizing
+                        roll_no = student["roll_no"]
+                        stud_name = student["name"]
+                        stud_dept = student["dept"]
+                        stud_div = student["div"]
+
+                        if stud_dept != dept:
+                            print(f"❌ WRONG DEPT: Roll No {roll_no} | {stud_name} | Dept: {stud_dept}")
+                            label = "Wrong Dept"
+
+                        elif stud_div != division:
+                            print(f"⚠️ WRONG DIVISION: Roll No {roll_no} | {stud_name} | Division: {stud_div}")
+                            label = "Wrong Div"
+
+                        else:
+                            label = str(roll_no)
+
+                            
+                            if roll_no not in marked_rolls:
+                                marked_rolls.add(roll_no)
+
+                                cursor.execute("""
+                                    INSERT INTO attendance_records (session_id, roll_no)
+                                    VALUES (%s, %s)
+                                    ON CONFLICT DO NOTHING
+                                """, (session_id, roll_no))
+
+                                conn.commit()
+                    else:
+                        print("❌ UNKNOWN FACE DETECTED")
+                else:
+                    print("❌ UNKNOWN FACE DETECTED")
+
+                # 📌 Draw box
+                top, right, bottom, left = [v * 2 for v in face_location]
                 cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-                cv2.putText(frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(frame, label,
+                            (left, top - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.8, (0, 255, 0), 2)
 
-            # 📌 Show live video with recognized faces
             cv2.imshow('Face Recognition', frame)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):  # Press 'q' to stop manually
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
     except Exception as e:
         return {"error": str(e)}
 
     finally:
-        # 📌 Mark attendance for detected students
-        date_column = datetime.now().strftime("%Y-%m-%d")
-        df_students[date_column] = df_students["Name"].apply(lambda x: "Present" if x in present_students else "Absent")
-
-        # 📌 Save subject-wise attendance file
-        df_students.to_excel(subject_filename, index=False)
-        print(f"📤 Attendance data saved in {subject_filename}")
-
-        # ✅ Release camera & close resources
         video_capture.release()
         cv2.destroyAllWindows()
         cursor.close()
         conn.close()
 
-    return {"recognized_students": list(present_students)}
-
-
+    return {"marked_students": list(marked_rolls)}
